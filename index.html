@@ -1,0 +1,238 @@
+
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#101629">
+<title>LAYMA LINK TOOL V2</title>
+<style>
+*{box-sizing:border-box}
+body{
+ margin:0;padding:20px 14px;
+ background:#0b1020;color:#fff;
+ font-family:Arial,sans-serif;
+}
+.app{
+ max-width:480px;margin:35px auto;
+ padding:23px;background:#151f35;
+ border:1px solid #30415e;
+ border-radius:20px;
+}
+h1{text-align:center;color:#60a5fa;font-size:25px}
+.sub{text-align:center;color:#aab8ce}
+label{display:block;margin:20px 0 8px;font-weight:bold}
+input{
+ width:100%;padding:15px;
+ background:#0b1020;color:white;
+ border:1px solid #526581;
+ border-radius:10px;font-size:15px;
+}
+button{
+ width:100%;padding:14px;
+ margin-top:12px;border:0;
+ border-radius:10px;
+ background:#2563eb;color:white;
+ font-weight:bold;font-size:15px;
+}
+button.secondary{background:#334155}
+button.green{background:#16834d}
+.result{
+ margin-top:20px;padding:15px;
+ background:#0b1020;border-radius:12px;
+ overflow-wrap:anywhere;
+ line-height:1.6;
+}
+a{color:#60a5fa;overflow-wrap:anywhere}
+.note{
+ font-size:12px;color:#aab8ce;
+ line-height:1.6;margin-top:18px
+}
+.hidden{display:none}
+hr{border:0;border-top:1px solid #34445f;margin:23px 0}
+.status{color:#86efac}
+</style>
+</head>
+<body>
+<div class="app">
+<h1>🔗 LAYMA LINK TOOL</h1>
+<p class="sub">Phân tích và tìm đường dẫn đích</p>
+
+<label>① Nhập link LAYMA</label>
+<input id="source" placeholder="Dán link layma.net...">
+
+<button onclick="analyze()">PHÂN TÍCH LINK</button>
+
+<div id="analysis" class="result">
+Kết quả phân tích sẽ xuất hiện ở đây.
+</div>
+
+<button id="open" class="green hidden" onclick="openSource()">
+MỞ TRANG LAYMA
+</button>
+
+<hr>
+
+<label>② Dán link cuối cùng sau khi hoàn thành các bước</label>
+<input id="destination" placeholder="Dán link đích tại đây...">
+
+<button onclick="checkDestination()">KIỂM TRA LINK ĐÍCH</button>
+
+<div id="final" class="result">
+Chưa có link đích.
+</div>
+
+<button id="copy" class="hidden" onclick="copyDestination()">
+📋 SAO CHÉP LINK ĐÍCH
+</button>
+
+<p class="note">
+V2 sử dụng phân tích URL công khai và hỗ trợ nhập link đích thủ công.
+Không tự động vượt CAPTCHA, quảng cáo hoặc xác thực.
+Luôn kiểm tra tên miền trước khi mở link lạ.
+</p>
+</div>
+
+<script>
+let sourceURL = "";
+let finalURL = "";
+
+function validURL(value){
+ try{
+  const u = new URL(value);
+  return ["http:","https:"].includes(u.protocol) ? u : null;
+ }catch(e){return null}
+}
+
+function decodeValue(value){
+ let result = value;
+ for(let i=0;i<5;i++){
+  try{
+   const next = decodeURIComponent(result.replace(/\+/g," "));
+   if(next===result)break;
+   result=next;
+  }catch(e){break}
+ }
+ return result;
+}
+
+function findTarget(start){
+ let current = start;
+ let last = null;
+ const keys = [
+  "url","target","dest","destination",
+  "redirect","redirect_url","redirect_uri",
+  "link","to","return","return_url","continue"
+ ];
+
+ for(let depth=0;depth<8;depth++){
+  let next = null;
+
+  for(const key of keys){
+   const value = current.searchParams.get(key);
+   if(!value)continue;
+
+   const candidate = validURL(decodeValue(value));
+   if(candidate){
+    next=candidate;
+    break;
+   }
+  }
+
+  if(!next){
+   for(const [,value] of current.searchParams){
+    const match = decodeValue(value).match(
+     /https?:\/\/[^\s"'<>]+/i
+    );
+    if(match){
+     const candidate=validURL(match[0]);
+     if(candidate){next=candidate;break}
+    }
+   }
+  }
+
+  if(!next || next.href===current.href)break;
+
+  last=next;
+  current=next;
+ }
+ return last;
+}
+
+function analyze(){
+ const raw=document.getElementById("source").value.trim();
+ const output=document.getElementById("analysis");
+ const open=document.getElementById("open");
+
+ open.classList.add("hidden");
+ sourceURL="";
+
+ const u=validURL(raw);
+ if(!u){
+  output.textContent="Link không hợp lệ. Hãy nhập link HTTP hoặc HTTPS.";
+  return;
+ }
+
+ if(!/(^|\.)layma\.net$/i.test(u.hostname)){
+  output.textContent="Đây không phải tên miền layma.net. Hãy kiểm tra lại link.";
+  return;
+ }
+
+ sourceURL=u.href;
+ open.classList.remove("hidden");
+
+ const target=findTarget(u);
+
+ if(target){
+  output.innerHTML=
+   '<span class="status">Đã tìm thấy URL được nhúng:</span><br>'+
+   '<a href="'+target.href.replace(/&/g,"&amp;")+
+   '" target="_blank" rel="noopener noreferrer">Link được tìm thấy</a>';
+ }else{
+  output.textContent=
+   "Không tìm thấy link đích trong URL. Có thể link được tạo từ máy chủ và cần hoàn thành các bước trên LAYMA.";
+ }
+}
+
+function openSource(){
+ if(sourceURL)window.open(sourceURL,"_blank","noopener");
+}
+
+function checkDestination(){
+ const raw=document.getElementById("destination").value.trim();
+ const output=document.getElementById("final");
+ const copy=document.getElementById("copy");
+
+ copy.classList.add("hidden");
+ finalURL="";
+
+ const u=validURL(raw);
+ if(!u){
+  output.textContent="Đường dẫn không hợp lệ.";
+  return;
+ }
+
+ finalURL=u.href;
+
+ output.innerHTML=
+  '<span class="status">Đã nhận đường dẫn!</span><br>'+
+  '<a href="'+u.href.replace(/&/g,"&amp;")+
+  '" target="_blank" rel="noopener noreferrer">'+
+  u.hostname+'</a><br><br>'+
+  'Hãy kiểm tra kỹ tên miền trước khi truy cập.';
+
+ copy.classList.remove("hidden");
+}
+
+async function copyDestination(){
+ if(!finalURL)return;
+ try{
+  await navigator.clipboard.writeText(finalURL);
+  alert("Đã sao chép link!");
+ }catch(e){
+  alert("Không thể sao chép. Hãy chọn và sao chép link thủ công.");
+ }
+}
+</script>
+</body>
+</html>
